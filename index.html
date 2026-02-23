@@ -1,10 +1,391 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#1a6b3c"/>
-  <!-- Card shape -->
-  <rect x="131" y="81" width="250" height="350" rx="18" fill="#fff" stroke="#ddd" stroke-width="2"/>
-  <!-- Spade symbol -->
-  <path d="M256 160 c-60 50 -90 90 -90 130 c0 40 30 60 60 60 c15 0 25-8 30-18 l0 48 l-30 0 c-5 0 -8 4 -8 8 c0 4 3 8 8 8 l60 0 l60 0 c5 0 8-4 8-8 c0-4-3-8-8-8 l-30 0 l0-48 c5 10 15 18 30 18 c30 0 60-20 60-60 c0-40-30-80-90-130 z" fill="#1a6b3c"/>
-  <!-- Corner rank "A" -->
-  <text x="155" y="130" font-family="Georgia, serif" font-size="36" font-weight="bold" fill="#1a6b3c">A</text>
-  <text x="357" y="405" font-family="Georgia, serif" font-size="36" font-weight="bold" fill="#1a6b3c" transform="rotate(180 357 390)">A</text>
-</svg>
+// ── Constants ──
+const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
+const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' };
+const SUIT_COLORS = { hearts: 'red', diamonds: 'red', clubs: 'black', spades: 'black' };
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const RANK_VALUES = { A:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:10, J:11, Q:12, K:13 };
+let TABLEAU_OFFSET_DOWN = 28;
+let TABLEAU_OFFSET_UP = 38;
+
+// ── Game State ──
+let stock = [];
+let waste = [];
+let foundations = [[], [], [], []];
+let tableau = [[], [], [], [], [], [], []];
+let moveCount = 0;
+let timerSeconds = 0;
+let timerInterval = null;
+
+// ── Responsive Layout ──
+function computeLayout() {
+    const vw = window.innerWidth;
+    const isMobile = vw <= 600;
+    const pad = isMobile ? 6 : 24;
+    const gap = isMobile ? Math.max(3, Math.round(vw * 0.01)) : 16;
+    const cols = 7;
+    const available = vw - 2 * pad - (cols - 1) * gap;
+    const cardW = Math.min(120, Math.floor(available / cols));
+    const cardH = Math.round(cardW * 1.4);
+    const scale = cardW / 120;
+
+    TABLEAU_OFFSET_DOWN = Math.max(10, Math.round(28 * scale));
+    TABLEAU_OFFSET_UP = Math.max(14, Math.round(38 * scale));
+
+    const r = document.documentElement.style;
+    r.setProperty('--card-w', cardW + 'px');
+    r.setProperty('--card-h', cardH + 'px');
+    r.setProperty('--card-radius', Math.round(10 * scale) + 'px');
+    r.setProperty('--slot-gap', gap + 'px');
+    r.setProperty('--game-pad-v', (isMobile ? 8 : 20) + 'px');
+    r.setProperty('--game-pad-h', pad + 'px');
+    r.setProperty('--row-gap', (isMobile ? 12 : 24) + 'px');
+    r.setProperty('--rank-size', Math.max(10, Math.round(18 * scale)) + 'px');
+    r.setProperty('--suit-small-size', Math.max(8, Math.round(14 * scale)) + 'px');
+    r.setProperty('--suit-center-size', Math.max(20, Math.round(48 * scale)) + 'px');
+    r.setProperty('--card-pad-v', Math.round(6 * scale) + 'px');
+    r.setProperty('--card-pad-h', Math.round(8 * scale) + 'px');
+    r.setProperty('--slot-icon-size', Math.round(36 * scale) + 'px');
+    r.setProperty('--slot-label-size', Math.max(8, Math.round(14 * scale)) + 'px');
+    r.setProperty('--card-back-logo-size', Math.round(36 * scale) + 'px');
+    r.setProperty('--recycle-icon-size', Math.round(40 * scale) + 'px');
+}
+
+// ── Deck Creation & Shuffling ──
+function createDeck() {
+    const deck = [];
+    for (const suit of SUITS) {
+        for (const rank of RANKS) {
+            deck.push({ suit, rank, faceUp: false });
+        }
+    }
+    return deck;
+}
+
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+// ── Card DOM Creation ──
+function createCardElement(card) {
+    const el = document.createElement('div');
+    const color = SUIT_COLORS[card.suit];
+    el.className = `card ${color} ${card.faceUp ? '' : 'face-down'}`;
+    el.dataset.suit = card.suit;
+    el.dataset.rank = card.rank;
+
+    const sym = SUIT_SYMBOLS[card.suit];
+
+    el.innerHTML = `
+        <div class="card-inner">
+            <div class="card-front">
+                <div class="corner corner-top">
+                    <span class="rank">${card.rank}</span>
+                    <span class="suit-small">${sym}</span>
+                </div>
+                <span class="suit-center">${sym}</span>
+                <div class="corner corner-bottom">
+                    <span class="rank">${card.rank}</span>
+                    <span class="suit-small">${sym}</span>
+                </div>
+            </div>
+            <div class="card-back">
+                <div class="card-back-pattern">
+                    <span class="card-back-logo">&spades;</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    card.el = el;
+    el._card = card;
+    return el;
+}
+
+// ── Rendering ──
+function renderStock() {
+    const slot = document.getElementById('stock');
+    slot.querySelectorAll('.card').forEach(c => c.remove());
+    slot.classList.toggle('empty-stock', stock.length === 0);
+
+    if (stock.length > 0) {
+        const topCard = stock[stock.length - 1];
+        topCard.faceUp = false;
+        const el = createCardElement(topCard);
+        el.style.position = 'absolute';
+        el.style.left = '0';
+        el.style.top = '0';
+        slot.appendChild(el);
+    }
+}
+
+function renderWaste() {
+    const slot = document.getElementById('waste');
+    slot.querySelectorAll('.card').forEach(c => c.remove());
+
+    if (waste.length > 0) {
+        const topCard = waste[waste.length - 1];
+        topCard.faceUp = true;
+        const el = createCardElement(topCard);
+        el.style.position = 'absolute';
+        el.style.left = '0';
+        el.style.top = '0';
+        slot.appendChild(el);
+    }
+}
+
+function renderFoundation(idx) {
+    const slot = document.getElementById(`foundation-${idx}`);
+    slot.querySelectorAll('.card').forEach(c => c.remove());
+
+    if (foundations[idx].length > 0) {
+        const topCard = foundations[idx][foundations[idx].length - 1];
+        topCard.faceUp = true;
+        const el = createCardElement(topCard);
+        el.style.position = 'absolute';
+        el.style.left = '0';
+        el.style.top = '0';
+        slot.appendChild(el);
+    }
+}
+
+function renderTableau(idx) {
+    const slot = document.getElementById(`tableau-${idx}`);
+    slot.querySelectorAll('.card').forEach(c => c.remove());
+
+    let topOffset = 0;
+    tableau[idx].forEach((card, i) => {
+        const el = createCardElement(card);
+        el.style.position = 'absolute';
+        el.style.left = '0';
+        el.style.top = topOffset + 'px';
+        el.style.zIndex = i + 1;
+        slot.appendChild(el);
+        topOffset += card.faceUp ? TABLEAU_OFFSET_UP : TABLEAU_OFFSET_DOWN;
+    });
+}
+
+function renderAll() {
+    renderStock();
+    renderWaste();
+    for (let i = 0; i < 4; i++) renderFoundation(i);
+    for (let i = 0; i < 7; i++) renderTableau(i);
+}
+
+// ── Game Logic ──
+function canPlaceOnTableau(card, tableauIdx) {
+    const pile = tableau[tableauIdx];
+    if (pile.length === 0) {
+        return card.rank === 'K';
+    }
+    const topCard = pile[pile.length - 1];
+    if (!topCard.faceUp) return false;
+    const targetColor = SUIT_COLORS[topCard.suit];
+    const cardColor = SUIT_COLORS[card.suit];
+    if (targetColor === cardColor) return false;
+    return RANK_VALUES[topCard.rank] - RANK_VALUES[card.rank] === 1;
+}
+
+function canPlaceOnFoundation(card, foundIdx) {
+    const pile = foundations[foundIdx];
+    if (pile.length === 0) {
+        return card.rank === 'A';
+    }
+    const topCard = pile[pile.length - 1];
+    if (topCard.suit !== card.suit) return false;
+    return RANK_VALUES[card.rank] - RANK_VALUES[topCard.rank] === 1;
+}
+
+function flipTopTableauCard(idx) {
+    const pile = tableau[idx];
+    if (pile.length > 0 && !pile[pile.length - 1].faceUp) {
+        pile[pile.length - 1].faceUp = true;
+        return true;
+    }
+    return false;
+}
+
+function incrementMoves() {
+    moveCount++;
+    document.getElementById('move-counter').textContent = `Moves: ${moveCount}`;
+}
+
+function checkWin() {
+    const total = foundations.reduce((sum, f) => sum + f.length, 0);
+    if (total === 52) {
+        clearInterval(timerInterval);
+        showWin();
+    }
+}
+
+function showWin() {
+    const overlay = document.getElementById('win-overlay');
+    const stats = document.getElementById('win-stats');
+    const mins = Math.floor(timerSeconds / 60);
+    const secs = timerSeconds % 60;
+    stats.textContent = `${moveCount} moves in ${mins}:${secs.toString().padStart(2, '0')}`;
+    overlay.classList.remove('hidden');
+    launchConfetti();
+}
+
+// ── Stock Click ──
+function onStockClick() {
+    const slot = document.getElementById('stock');
+    if (stock.length === 0) {
+        // Recycle waste back to stock
+        if (waste.length === 0) return;
+        stock = waste.reverse();
+        stock.forEach(c => c.faceUp = false);
+        waste = [];
+        renderStock();
+        renderWaste();
+        incrementMoves();
+        return;
+    }
+
+    const card = stock.pop();
+    card.faceUp = true;
+    waste.push(card);
+
+    renderStock();
+    renderWaste();
+
+    // Flip animation on the waste card
+    const wasteSlot = document.getElementById('waste');
+    const topEl = wasteSlot.querySelector('.card');
+    if (topEl) {
+        topEl.classList.add('face-down');
+        requestAnimationFrame(() => {
+            topEl.classList.add('flipping-to-front');
+            topEl.classList.remove('face-down');
+        });
+        setTimeout(() => topEl.classList.remove('flipping-to-front'), 450);
+    }
+    incrementMoves();
+}
+
+// ── Double-click to auto-move to foundation ──
+function tryAutoFoundation(card, sourcePile, sourceType, sourceIdx) {
+    for (let i = 0; i < 4; i++) {
+        if (canPlaceOnFoundation(card, i)) {
+            sourcePile.pop();
+            foundations[i].push(card);
+            card.faceUp = true;
+            incrementMoves();
+
+            if (sourceType === 'tableau') {
+                flipTopTableauCard(sourceIdx);
+                renderTableau(sourceIdx);
+            } else if (sourceType === 'waste') {
+                renderWaste();
+            }
+            renderFoundation(i);
+            checkWin();
+            return true;
+        }
+    }
+    return false;
+}
+
+// ── Timer ──
+function startTimer() {
+    clearInterval(timerInterval);
+    timerSeconds = 0;
+    document.getElementById('timer').textContent = 'Time: 0:00';
+    timerInterval = setInterval(() => {
+        timerSeconds++;
+        const mins = Math.floor(timerSeconds / 60);
+        const secs = timerSeconds % 60;
+        document.getElementById('timer').textContent = `Time: ${mins}:${secs.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+// ── Deal & New Game ──
+function dealGame() {
+    document.getElementById('win-overlay').classList.add('hidden');
+    document.querySelectorAll('.confetti-piece').forEach(c => c.remove());
+
+    stock = [];
+    waste = [];
+    foundations = [[], [], [], []];
+    tableau = [[], [], [], [], [], [], []];
+    moveCount = 0;
+    document.getElementById('move-counter').textContent = 'Moves: 0';
+    startTimer();
+
+    const deck = shuffle(createDeck());
+    let cardIdx = 0;
+
+    // Deal to tableau
+    for (let col = 0; col < 7; col++) {
+        for (let row = 0; row <= col; row++) {
+            const card = deck[cardIdx++];
+            card.faceUp = (row === col);
+            tableau[col].push(card);
+        }
+    }
+
+    // Remaining cards go to stock
+    while (cardIdx < 52) {
+        deck[cardIdx].faceUp = false;
+        stock.push(deck[cardIdx++]);
+    }
+
+    renderAll();
+
+    // Deal animation
+    document.querySelectorAll('.tableau-slot .card').forEach((el, i) => {
+        el.style.opacity = '0';
+        el.classList.add('dealing');
+        el.style.animationDelay = `${i * 40}ms`;
+        setTimeout(() => {
+            el.style.opacity = '';
+            el.classList.remove('dealing');
+        }, 400 + i * 40);
+    });
+}
+
+// ── Event Listeners ──
+document.getElementById('stock').addEventListener('click', (e) => {
+    // Only handle clicks on the slot itself or face-down cards
+    onStockClick();
+});
+
+document.getElementById('new-game-btn').addEventListener('click', () => {
+    dealGame();
+});
+
+document.getElementById('win-new-game').addEventListener('click', () => {
+    dealGame();
+});
+
+// Double-click handler for auto-foundation
+document.addEventListener('dblclick', (e) => {
+    const cardEl = e.target.closest('.card');
+    if (!cardEl) return;
+    const card = cardEl._card;
+    if (!card || !card.faceUp) return;
+
+    // Find source
+    for (let i = 0; i < 7; i++) {
+        const pile = tableau[i];
+        if (pile.length > 0 && pile[pile.length - 1] === card) {
+            tryAutoFoundation(card, pile, 'tableau', i);
+            return;
+        }
+    }
+    if (waste.length > 0 && waste[waste.length - 1] === card) {
+        tryAutoFoundation(card, waste, 'waste', -1);
+    }
+});
+
+// ── Start ──
+computeLayout();
+dealGame();
+window.addEventListener('resize', () => {
+    computeLayout();
+    renderAll();
+});
