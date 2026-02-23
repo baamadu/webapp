@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full background for maskable safe zone -->
+  <rect width="512" height="512" fill="#1a6b3c"/>
+  <!-- Card shape (centered, smaller for safe zone) -->
+  <rect x="156" y="106" width="200" height="300" rx="14" fill="#fff" stroke="#ddd" stroke-width="2"/>
+  <!-- Spade symbol -->
+  <path d="M256 175 c-48 40 -72 72 -72 104 c0 32 24 48 48 48 c12 0 20-6 24-14 l0 38 l-24 0 c-4 0 -6 3 -6 6 c0 3 2 6 6 6 l48 0 l48 0 c4 0 6-3 6-6 c0-3-2-6-6-6 l-24 0 l0-38 c4 8 12 14 24 14 c24 0 48-16 48-48 c0-32-24-64-72-104 z" fill="#1a6b3c"/>
+</svg>

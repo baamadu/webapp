@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a6b3c">
+    <meta name="description" content="Classic Klondike Solitaire card game">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Patience">
+    <title>Patience</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="menu-bar">
+        <div class="menu-item">
+            <button class="menu-btn">Game</button>
+            <div class="menu-dropdown">
+                <button id="new-game-btn">New Game</button>
+            </div>
+        </div>
+        <div class="menu-right">
+            <span id="move-counter">Moves: 0</span>
+            <span id="timer">Time: 0:00</span>
+        </div>
+    </nav>
+
+    <div class="game-area">
+        <!-- Stock and Waste -->
+        <div class="top-row">
+            <div class="stock-waste">
+                <div id="stock" class="card-slot stock-slot">
+                    <div class="slot-label">Stock</div>
+                </div>
+                <div id="waste" class="card-slot waste-slot">
+                    <div class="slot-label">Waste</div>
+                </div>
+            </div>
+            <div class="spacer"></div>
+            <div class="foundations">
+                <div id="foundation-0" class="card-slot foundation-slot" data-foundation="0">
+                    <div class="slot-icon">&hearts;</div>
+                </div>
+                <div id="foundation-1" class="card-slot foundation-slot" data-foundation="1">
+                    <div class="slot-icon">&diams;</div>
+                </div>
+                <div id="foundation-2" class="card-slot foundation-slot" data-foundation="2">
+                    <div class="slot-icon">&clubs;</div>
+                </div>
+                <div id="foundation-3" class="card-slot foundation-slot" data-foundation="3">
+                    <div class="slot-icon">&spades;</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tableau -->
+        <div class="tableau-row">
+            <div id="tableau-0" class="card-slot tableau-slot" data-tableau="0"></div>
+            <div id="tableau-1" class="card-slot tableau-slot" data-tableau="1"></div>
+            <div id="tableau-2" class="card-slot tableau-slot" data-tableau="2"></div>
+            <div id="tableau-3" class="card-slot tableau-slot" data-tableau="3"></div>
+            <div id="tableau-4" class="card-slot tableau-slot" data-tableau="4"></div>
+            <div id="tableau-5" class="card-slot tableau-slot" data-tableau="5"></div>
+            <div id="tableau-6" class="card-slot tableau-slot" data-tableau="6"></div>
+        </div>
+    </div>
+
+    <!-- Win overlay -->
+    <div id="win-overlay" class="win-overlay hidden">
+        <div class="win-content">
+            <h1>You Win!</h1>
+            <p>Congratulations!</p>
+            <p id="win-stats"></p>
+            <button id="win-new-game">Play Again</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script src="drag.js"></script>
+    <script src="animations.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js');
+        }
+    </script>
+</body>
+</html>
